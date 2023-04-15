@@ -51,8 +51,8 @@ contract Bidnow {
         uint256 initialPrice;
         uint256 openBiddingTime;
         uint256 closeBiddingTime;
-        string statusAuction;
         uint256 transferAssetStatus;
+        string statusAuction;
     }
 
     // List All Auction
@@ -69,7 +69,6 @@ contract Bidnow {
     mapping(address => Auction[]) private ownerToListAuction;
     // a uuid to manage an Auction
     mapping(uint256 => Auction) private uuidToAuction;
-
 
 
     /**
@@ -90,10 +89,9 @@ contract Bidnow {
     isOwnerOfNFT(nftContract, tokenId, msg.sender)
     {
         // checking openBiddingTime and closeBiddingTime are valid
-        require(openBiddingTime < closeBiddingTime, "Setting time is invalid!");
+        require((block.timestamp < openBiddingTime) && (openBiddingTime < closeBiddingTime), "Setting time is invalid!");
 
         // create a new auction
-        // string memory statusAuction = setStatusAuction(openBiddingTime, closeBiddingTime);
         // uint256 transferAssetStatus = NOT_TRANSFER_ASSET;
         Auction memory auction = Auction(
                             msg.sender,
@@ -102,33 +100,16 @@ contract Bidnow {
                             initialPrice,
                             openBiddingTime,
                             closeBiddingTime,
-                            setStatusAuction(openBiddingTime, closeBiddingTime),
-                            NOT_TRANSFER_ASSET
+                            NOT_TRANSFER_ASSET,
+                            "UPCOMING_AUCTION"
                         );
+        
 
-        // add new auction item to listAuction (all auctions)
-        listAllAuction.push(auction);
+        // call assignDataToBlockchain function
+        uint256 uuid = assignDataToBlockchain(auction);
 
-        // add new auction item to listAuction of owner
-        ownerToListAuction[msg.sender].push(auction);
-
-        // Assign a new auction to uuid
-        // uint256 uuid = getUniqueNumber();
-        uuidToAuction[getUniqueNumber()] = auction;
-
-        // nft owner purchase LISTING_FEE
-        IERC20(BQKContract).transferFrom(
-            msg.sender,
-            address(this),
-            LISTING_FREE
-        );
-
-        // send NFT from msg.sender (owner wallet) to smart contract
-        IERC721(nftContract).transferFrom(
-            msg.sender,
-            address(this),
-            tokenId
-        );
+        // execute transfer asset
+        executeTransfer(nftContract, tokenId);   
 
         // checking that send NFT is succeed?
         require(
@@ -144,10 +125,43 @@ contract Bidnow {
             initialPrice,
             openBiddingTime,
             closeBiddingTime,
-            setStatusAuction(openBiddingTime, closeBiddingTime),
+            "UPCOMING_AUCTION",
             NOT_TRANSFER_ASSET,
-            getUniqueNumber()
+            uuid
         );
+    }
+
+
+    // execute transfer function
+    function executeTransfer(address nftContract, uint256 tokenId) internal {
+                // nft owner purchase LISTING_FEE
+        IERC20(BQKContract).transferFrom(
+            msg.sender,
+            address(this),
+            LISTING_FREE
+        );
+
+        // send NFT from msg.sender (owner wallet) to smart contract
+        IERC721(nftContract).transferFrom(
+            msg.sender,
+            address(this),
+            tokenId
+        );
+    }
+
+    // assign data function
+    function assignDataToBlockchain(Auction memory auction) internal returns(uint256) {
+                // add new auction item to listAuction (all auctions)
+        listAllAuction.push(auction);
+
+        // add new auction item to listAuction of owner
+        ownerToListAuction[msg.sender].push(auction);
+
+        // Assign a new auction to uuid
+        uint256 uuid = getUniqueNumber();
+        uuidToAuction[uuid] = auction;
+
+        return uuid;
     }
 
     // this function to get a number as uuid 
@@ -181,20 +195,12 @@ contract Bidnow {
     ) 
     public
     {
-        // checking msg.sender is owner of the auction which is canceled
         Auction memory auction = uuidToAuction[uuid];
-        // address ownerAuction = auction.ownerAuction;
-        // address nftContract = auction.nftContract;
-        // uint256 tokenId = auction.tokenId;
-
-        // IERC721 nft = IERC721(nftContract);
-        // address owner = nft.ownerOf(tokenId);
+        // checking msg.sender is owner of the auction which is canceled
         require(auction.ownerAuction == IERC721(auction.nftContract).ownerOf(auction.tokenId), "Owner of Auction id invalid!");
 
-        // checking time valid to calcel
-        // uint256 closeBiddingTime = auction.closeBiddingTime;
-        // uint256 pointTimestamp = block.timestamp;
-        require(block.timestamp < auction.closeBiddingTime, "Can not calcel auction. Because time is over!");
+        // checking time valid to calcel. Must calceling before 1 hour = 3600 second
+        require(block.timestamp < auction.closeBiddingTime - 3600, "Can not calcel auction. Because time is over!");
 
         /**
         execute logic code: re-send nft to owner, re-send BQK token to bidders is only for active auction
@@ -464,10 +470,6 @@ contract Bidnow {
     );
 
 
-
-
-
-
     /**
     ====================================================================================================================================================
         Modifiers
@@ -490,6 +492,8 @@ contract Bidnow {
     modifier isCorrectAuctionTime(
         uint256 uuid
     ) {
+        require(uuidToAuction[uuid].ownerAuction != address(0), "Auction with this UUID does not exist");
+
         Auction memory auction = uuidToAuction[uuid];
 
         uint256 openBiddingTime = auction.openBiddingTime;
@@ -504,9 +508,6 @@ contract Bidnow {
         );
         _;
     }
-
-
-
 
 
 
