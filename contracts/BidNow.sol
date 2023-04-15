@@ -18,7 +18,7 @@ contract Bidnow {
 
     address private BQKContract;
 
-    uint256 private constant LISTING_FREE = 10000000000000000000; // 10 BQR token
+    uint256 private constant LISTING_FREE = 100000000000000000000; // 100 BQR token
 
     uint256 private constant NOT_TRANSFER_ASSET = 0;
 
@@ -92,7 +92,6 @@ contract Bidnow {
         require((block.timestamp < openBiddingTime) && (openBiddingTime < closeBiddingTime), "Setting time is invalid!");
 
         // create a new auction
-        // uint256 transferAssetStatus = NOT_TRANSFER_ASSET;
         Auction memory auction = Auction(
                             msg.sender,
                             nftContract,
@@ -103,7 +102,6 @@ contract Bidnow {
                             NOT_TRANSFER_ASSET,
                             "UPCOMING_AUCTION"
                         );
-        
 
         // call assignDataToBlockchain function
         uint256 uuid = assignDataToBlockchain(auction);
@@ -134,7 +132,7 @@ contract Bidnow {
 
     // execute transfer function
     function executeTransfer(address nftContract, uint256 tokenId) internal {
-                // nft owner purchase LISTING_FEE
+        // nft owner purchase LISTING_FEE
         IERC20(BQKContract).transferFrom(
             msg.sender,
             address(this),
@@ -151,7 +149,7 @@ contract Bidnow {
 
     // assign data function
     function assignDataToBlockchain(Auction memory auction) internal returns(uint256) {
-                // add new auction item to listAuction (all auctions)
+        // add new auction item to listAuction (all auctions)
         listAllAuction.push(auction);
 
         // add new auction item to listAuction of owner
@@ -307,7 +305,7 @@ contract Bidnow {
     ====================================================================================================================================================
      */
 
-    // function to execute logic that: transfer NFT to the winner and trnasfer BQK token to old owner of NFT aftwer auction ends
+    // function to execute logic that: transfer NFT to the winner and trnasfer BQK token to old owner of NFT after auction ends
     function transferAssetAfterAuctionEnd(uint256 uuid) external {
         // get list bidder of auction has uuid
         BidderInfor[] memory bidderInforList = uuidToListBidderInfo[uuid];
@@ -355,7 +353,13 @@ contract Bidnow {
     }
 
     // function to get the winner of the auction with its uuid
-    function getTheWinnerOfAuction(uint256 uuid) public view returns(BidderInfor memory) {
+    function getTheWinnerOfAuction(uint256 uuid) public returns(BidderInfor memory) {
+
+        // checking ended auction
+        require(keccak256(abi.encodePacked(uuidToAuction[uuid].statusAuction)) == keccak256(abi.encodePacked("ENDED_AUCTION")), "Auction must end");
+
+        updateStatusAuction(uuid);
+
         BidderInfor[] memory bidderInforList = uuidToListBidderInfo[uuid];
 
         uint256 len = bidderInforList.length;
@@ -381,15 +385,16 @@ contract Bidnow {
     ====================================================================================================================================================
      */
 
-    // this function to update statusAUction for an auction which identify by uuid
+    // this function to update statusAuction for an auction which identify by uuid
     function updateStatusAuction(uint256 uuid) public {
-        Auction memory auction = uuidToAuction[uuid];
-
-        auction.statusAuction = setStatusAuction(auction.openBiddingTime, auction.closeBiddingTime);
+        uuidToAuction[uuid].statusAuction = setStatusAuction(
+            uuidToAuction[uuid].openBiddingTime, 
+            uuidToAuction[uuid].closeBiddingTime
+        );
 
         emit updatingStatusAuctionEvent(
             uuid,
-            auction.statusAuction
+            uuidToAuction[uuid].statusAuction
         );
     }
 
@@ -494,6 +499,8 @@ contract Bidnow {
     ) {
         require(uuidToAuction[uuid].ownerAuction != address(0), "Auction with this UUID does not exist");
 
+        updateStatusAuction(uuid);
+
         Auction memory auction = uuidToAuction[uuid];
 
         uint256 openBiddingTime = auction.openBiddingTime;
@@ -518,16 +525,16 @@ contract Bidnow {
      */
 
     // this function to get all auction in BidNow Dapp
-    function getAllAuction() public view returns(Auction[] memory) {
+    function getAllAuction() public returns(Auction[] memory) {
+        updateStatusAllAuction();
         return listAllAuction;
     }
 
     // this function to get auction flow by statusAuction
-    function getListAuctionFromStatus(string calldata statusAuction) public view returns(Auction[] memory) {
-        // update statusAuction before get list => call this function updateStatusAllAuction();
+    function getListAuctionFromStatus(string calldata statusAuction) public returns(Auction[] memory) {
+        updateStatusAllAuction();
 
         uint256 count = 0;
-
         for(uint256 i = 0; i < listAllAuction.length; i++) {
             Auction memory auction = listAllAuction[i];
 
@@ -537,8 +544,8 @@ contract Bidnow {
         }
 
         Auction[] memory listAuctionByStatus = new Auction[](count);
-        count = 0;
 
+        count = 0;
         for(uint256 i = 0; i < listAllAuction.length; i++) {
             Auction memory auction = listAllAuction[i];
 
@@ -553,19 +560,20 @@ contract Bidnow {
     }
 
     // get auction from uuid
-    function getAuctionFromUuid(uint256 uuid) public view returns(Auction memory) {
+    function getAuctionFromUuid(uint256 uuid) public returns(Auction memory) {
+        updateStatusAuction(uuid);
         return uuidToAuction[uuid];
     }
 
     // get status Auction from uuid
-    function getStatusAuctionFromUUID(uint256 uuid) public view returns(string memory) {
-        Auction memory auction = uuidToAuction[uuid];
-        
-        return auction.statusAuction;
+    function getStatusAuctionFromUUID(uint256 uuid) public returns(string memory) {
+        updateStatusAuction(uuid);
+        return uuidToAuction[uuid].statusAuction;
     }
 
     // get list Bidder from uuid
-    function getListBidderFromUUID(uint256 uuid) public view returns(BidderInfor[] memory) {
+    function getListBidderFromUUID(uint256 uuid) public returns(BidderInfor[] memory) {
+        updateStatusAuction(uuid);
         return uuidToListBidderInfo[uuid];
     }
 
