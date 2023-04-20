@@ -25,6 +25,12 @@ contract Bidnow {
 
     uint256 private constant ALREADY_TRANSFER_ASSET = 1;
 
+    string private constant UPCOMING_AUCTION_STATUS = "UPCOMING_AUCTION";
+
+    string private constant ACTIVE_AUCTION_STATUS = "ACTIVE_AUCTION";
+
+    string private constant ENDED_AUCTION_STATUS = "ENDED_AUCTION";
+
     /**
     ====================================================================================================================================================
         Constructor
@@ -62,11 +68,11 @@ contract Bidnow {
     ====================================================================================================================================================
      */
 
-    // Owner of list auction 
-    mapping(address => Auction[]) private ownerToListAuction;
     // a uuid to manage an Auction
     mapping(uint256 => Auction) private uuidToAuction;
 
+    // this mapping to manage a list contains address and offered price of bidder each bidding time.
+    mapping(uint256 => BidderInfor[]) private uuidToListBidderInfo;
 
     /**
     ====================================================================================================================================================
@@ -97,7 +103,7 @@ contract Bidnow {
                             openBiddingTime,
                             closeBiddingTime,
                             NOT_TRANSFER_ASSET,
-                            "UPCOMING_AUCTION"
+                            UPCOMING_AUCTION_STATUS
                         );
 
         // call assignDataToBlockchain function
@@ -120,7 +126,7 @@ contract Bidnow {
             initialPrice,
             openBiddingTime,
             closeBiddingTime,
-            "UPCOMING_AUCTION",
+            UPCOMING_AUCTION_STATUS,
             NOT_TRANSFER_ASSET,
             uuid
         );
@@ -146,9 +152,6 @@ contract Bidnow {
 
     // assign data function
     function assignDataToBlockchain(Auction memory auction) internal returns(uint256) {
-        // add new auction item to listAuction of owner
-        ownerToListAuction[msg.sender].push(auction);
-
         // Assign a new auction to uuid
         uint256 uuid = getUniqueNumber();
         uuidToAuction[uuid] = auction;
@@ -198,7 +201,7 @@ contract Bidnow {
         execute logic code: re-send nft to owner, re-send BQK token to bidders is only for active auction
          */
 
-        if(keccak256(abi.encodePacked(auction.statusAuction)) == keccak256(abi.encodePacked("ACTIVE_AUCTION"))) {
+        if(keccak256(abi.encodePacked(auction.statusAuction)) == keccak256(abi.encodePacked(ACTIVE_AUCTION_STATUS))) {
             // re-send nft to owner of auction
             IERC721(auction.nftContract).transferFrom(
                 address(this),
@@ -223,7 +226,7 @@ contract Bidnow {
         // update data
         auction.openBiddingTime = 0;
         auction.closeBiddingTime = 1; // ensure that closeBiddingTime is bigger than openBiddingTime
-        auction.statusAuction = "ENDED_AUCTION";
+        auction.statusAuction = ENDED_AUCTION_STATUS;
         auction.transferAssetStatus = ALREADY_TRANSFER_ASSET;
 
         emit CancelingAuctionEvent(
@@ -239,8 +242,6 @@ contract Bidnow {
         );
     }
 
-
-
     /**
     ====================================================================================================================================================
         joinAuction function
@@ -252,9 +253,6 @@ contract Bidnow {
         address bidderAddress;
         uint256 offeredPrice;
     }
-
-    // this mapping to manage a list contains address and offered price of bidder each bidding time.
-    mapping(uint256 => BidderInfor[]) private uuidToListBidderInfo;
 
     // this function is used for Bidder can join auction
     function joinAuction(
@@ -326,7 +324,7 @@ contract Bidnow {
             }            
         }
 
-        uuidToAuction[uuid].statusAuction = "ENDED_AUCTION";
+        uuidToAuction[uuid].statusAuction = ENDED_AUCTION_STATUS;
         uuidToAuction[uuid].transferAssetStatus = ALREADY_TRANSFER_ASSET;
 
         emit TransferingAssetEvent(
@@ -357,38 +355,9 @@ contract Bidnow {
 
 
     // Withdraw function
-    function withdraw(address _to, uint256 amount) public {
+    function withdraw(address _to, uint256 amount) private {
         IERC20(BQKContract).transfer(_to, amount);
     }
-
-
-    /**
-    ====================================================================================================================================================
-        updateStatusAuction and updateStatusAllAuction function
-    ====================================================================================================================================================
-     */
-
-    // this function to update statusAuction for an auction which identify by uuid
-    function updateStatusAuction(uint256 uuid) public {
-        uuidToAuction[uuid].statusAuction = setStatusAuction(
-            uuidToAuction[uuid].openBiddingTime, 
-            uuidToAuction[uuid].closeBiddingTime
-        );
-    }
-    
-    // this function to get current status of auction
-    function setStatusAuction(uint256 openBiddingTime, uint256 closeBiddingTime) internal view returns(string memory) {
-        uint256 pointTimestamp = block.timestamp;
-
-        if (pointTimestamp < openBiddingTime) {
-            return "UPCOMING_AUCTION";
-        } else if (pointTimestamp > closeBiddingTime) {
-            return "ENDED_AUCTION";
-        } else {
-            return "ACTIVE_AUCTION";
-        }
-    }
-
 
     /**
     ====================================================================================================================================================
@@ -462,8 +431,6 @@ contract Bidnow {
     ) {
         require(uuidToAuction[uuid].ownerAuction != address(0), "Auction with this UUID does not exist");
 
-        updateStatusAuction(uuid);
-
         Auction memory auction = uuidToAuction[uuid];
 
         uint256 openBiddingTime = auction.openBiddingTime;
@@ -478,14 +445,6 @@ contract Bidnow {
         );
         _;
     }
-
-
-
-    /**
-    ====================================================================================================================================================
-        Get function
-    ====================================================================================================================================================
-     */
 
     /**
     ====================================================================================================================================================
