@@ -17,8 +17,6 @@ contract Bidnow {
     
     address private ownerBidNowContract;
 
-    address private fundingAddress = 0xE04Eb2856473D896fCd1B4792573124d435A94E6;
-
     address private BQKContract;
 
     uint256 private constant LISTING_FREE = 100000000000000000000; // 100 BQR token
@@ -57,10 +55,6 @@ contract Bidnow {
         uint256 transferAssetStatus;
         string statusAuction;
     }
-
-    // List All Auction
-    Auction[] private listAllAuction;
-
 
     /**
     ====================================================================================================================================================
@@ -114,7 +108,7 @@ contract Bidnow {
 
         // checking that send NFT is succeed?
         require(
-            IERC721(nftContract).ownerOf(tokenId) == fundingAddress, 
+            IERC721(nftContract).ownerOf(tokenId) == address(this), 
             "Failed to transfer NFT from msg.sender to smart contract"
         );
 
@@ -138,23 +132,20 @@ contract Bidnow {
         // nft owner purchase LISTING_FEE
         IERC20(BQKContract).transferFrom(
             msg.sender,
-            fundingAddress,
+            address(this),
             LISTING_FREE
         );
 
         // send NFT from msg.sender (owner wallet) to smart contract
         IERC721(nftContract).transferFrom(
             msg.sender,
-            fundingAddress,
+            address(this),
             tokenId
         );
     }
 
     // assign data function
     function assignDataToBlockchain(Auction memory auction) internal returns(uint256) {
-        // add new auction item to listAuction (all auctions)
-        listAllAuction.push(auction);
-
         // add new auction item to listAuction of owner
         ownerToListAuction[msg.sender].push(auction);
 
@@ -210,7 +201,7 @@ contract Bidnow {
         if(keccak256(abi.encodePacked(auction.statusAuction)) == keccak256(abi.encodePacked("ACTIVE_AUCTION"))) {
             // re-send nft to owner of auction
             IERC721(auction.nftContract).transferFrom(
-                fundingAddress,
+                address(this),
                 auction.ownerAuction,
                 auction.tokenId
             );
@@ -219,12 +210,12 @@ contract Bidnow {
             BidderInfor[] memory bidderInforList = uuidToListBidderInfo[uuid];
 
             // return BQK token to other bidder
-            for(uint256 i = 0; i < bidderInforList.length; i++) {
-                IERC20(BQKContract).transfer(
-                    bidderInforList[i].bidderAddress,
-                    bidderInforList[i].offeredPrice * (10 ** 18)
-                );
-            }            
+            if (bidderInforList.length > 0) {
+                // return BQK token to other bidder
+                for(uint256 i = 0; i < bidderInforList.length; i++) {
+                    withdraw(bidderInforList[i].bidderAddress, bidderInforList[i].offeredPrice * (10**18));
+                }            
+            }        
         }
 
         // delete auction
@@ -283,7 +274,7 @@ contract Bidnow {
         // transfer BQK token from bidder's wallet to smart contract.
         IERC20(BQKContract).transferFrom(
             msg.sender,
-            fundingAddress,
+            address(this),
             offeredPrice * (10**18)
         );
 
@@ -308,55 +299,34 @@ contract Bidnow {
     ====================================================================================================================================================
      */
 
-    function testGetWinner(uint256 uuid) public view returns(BidderInfor memory) {
-        BidderInfor memory winner = getTheWinnerOfAuction(uuid);
-
-        return winner;
-    }
-
     // function to execute logic that: transfer NFT to the winner and trnasfer BQK token to old owner of NFT after auction ends
     function transferAssetAfterAuctionEnd(uint256 uuid) external {
-        updateStatusAuction(uuid);
-
         // get list bidder of auction has uuid
         BidderInfor[] memory bidderInforList = uuidToListBidderInfo[uuid];
 
         // get winner of this auction
         BidderInfor memory winner = getTheWinnerOfAuction(uuid);
 
-        // checking auction is ended
-        require(keccak256(abi.encodePacked(uuidToAuction[uuid].statusAuction)) == keccak256(abi.encodePacked("ENDED_AUCTION")), "statusAuction is invalid!");
-
-        // checking that auction is non-ready transfer asset
-        require(uuidToAuction[uuid].transferAssetStatus == NOT_TRANSFER_ASSET, "Already transfer asset!");
-
         // transfer NFT from SMC to winner
         IERC721(uuidToAuction[uuid].nftContract).transferFrom(
-            fundingAddress,
+            address(this),
             winner.bidderAddress,
             uuidToAuction[uuid].tokenId
         );
 
-        // transfer BQK token from SMC to old owner
-        IERC20(BQKContract).transferFrom(
-            fundingAddress,
-            uuidToAuction[uuid].ownerAuction,
-            winner.offeredPrice * (10**18)
-        );
+        // transfer BQK token from SMC to old owne
+        withdraw(uuidToAuction[uuid].ownerAuction, winner.offeredPrice * (10**18));
 
         if (bidderInforList.length > 0) {
             // return BQK token to other bidder
             for(uint256 i = 0; i < bidderInforList.length; i++) {
                 if (bidderInforList[i].bidderAddress != winner.bidderAddress) {
-                    IERC20(BQKContract).transferFrom(
-                        fundingAddress,
-                        bidderInforList[i].bidderAddress,
-                        bidderInforList[i].offeredPrice * (10**18)
-                    );
+                    withdraw(bidderInforList[i].bidderAddress, bidderInforList[i].offeredPrice * (10**18));
                 }
             }            
         }
 
+        uuidToAuction[uuid].statusAuction = "ENDED_AUCTION";
         uuidToAuction[uuid].transferAssetStatus = ALREADY_TRANSFER_ASSET;
 
         emit TransferingAssetEvent(
@@ -386,6 +356,11 @@ contract Bidnow {
     }
 
 
+    // Withdraw function
+    function withdraw(address _to, uint256 amount) public {
+        IERC20(BQKContract).transfer(_to, amount);
+    }
+
 
     /**
     ====================================================================================================================================================
@@ -400,22 +375,9 @@ contract Bidnow {
             uuidToAuction[uuid].closeBiddingTime
         );
     }
-
-    // this function to update statusAuction for all auction 
-    function updateStatusAllAuction() public {
-        for(uint256 i = 0; i < listAllAuction.length; i++) {
-            listAllAuction[i].statusAuction = setStatusAuction(
-                listAllAuction[i].openBiddingTime,
-                listAllAuction[i].closeBiddingTime
-            );
-        }
-    }
-
+    
     // this function to get current status of auction
     function setStatusAuction(uint256 openBiddingTime, uint256 closeBiddingTime) internal view returns(string memory) {
-        // checking time valid
-        require(openBiddingTime < closeBiddingTime, "invalid time bidding!");
-
         uint256 pointTimestamp = block.timestamp;
 
         if (pointTimestamp < openBiddingTime) {
@@ -524,65 +486,6 @@ contract Bidnow {
         Get function
     ====================================================================================================================================================
      */
-
-    // this function to get all auction in BidNow Dapp
-    function getAllAuction() public view returns(Auction[] memory) {
-        // updateStatusAllAuction();
-        return listAllAuction;
-    }
-
-    // this function to get auction flow by statusAuction
-    function getListAuctionFromStatus(string calldata statusAuction) public returns(Auction[] memory) {
-        updateStatusAllAuction();
-
-        uint256 count = 0;
-        for(uint256 i = 0; i < listAllAuction.length; i++) {
-            Auction memory auction = listAllAuction[i];
-
-            if(keccak256(abi.encodePacked(auction.statusAuction)) == keccak256(abi.encodePacked(statusAuction))) {
-                count++;
-            } 
-        }
-
-        Auction[] memory listAuctionByStatus = new Auction[](count);
-
-        count = 0;
-        for(uint256 i = 0; i < listAllAuction.length; i++) {
-            Auction memory auction = listAllAuction[i];
-
-            if(keccak256(abi.encodePacked(auction.statusAuction)) == keccak256(abi.encodePacked(statusAuction))) {
-                listAuctionByStatus[count] = auction;
-                count++;
-                // listAuctionByStatus.push(auction);
-            } 
-        }
-
-        return listAuctionByStatus;
-    }
-
-    // get auction from uuid
-    function getAuctionFromUuid(uint256 uuid) public returns(Auction memory) {
-        updateStatusAuction(uuid);
-        return uuidToAuction[uuid];
-    }
-
-    // get status Auction from uuid
-    function getStatusAuctionFromUUID(uint256 uuid) public returns(string memory) {
-        updateStatusAuction(uuid);
-        return uuidToAuction[uuid].statusAuction;
-    }
-
-    // get list Bidder from uuid
-    function getListBidderFromUUID(uint256 uuid) public returns(BidderInfor[] memory) {
-        updateStatusAuction(uuid);
-        return uuidToListBidderInfo[uuid];
-    }
-
-    // get list auction of spender
-    function getListAuctionOfSpender(address spender) public view returns(Auction[] memory) {
-        return ownerToListAuction[spender];
-    }
-
 
     /**
     ====================================================================================================================================================

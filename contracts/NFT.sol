@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
 
-contract HoBINFT is ERC721, ERC721URIStorage {
+contract NFT is ERC721, ERC721URIStorage {
     using Strings for uint256;
     // string private ipfsHost = "https://ipfs.infura.io/"; // this ipfsHost in infura 
     string private ipfsHost = "https://ipfs.io/"; // this ipfsHost public
@@ -19,7 +19,7 @@ contract HoBINFT is ERC721, ERC721URIStorage {
     }
 
     function _generateTokenURI(string memory ipfsHash) internal view returns (string memory) {
-        return string(abi.encodePacked(ipfsHost, "/ipfs/", ipfsHash));
+        return string(abi.encodePacked(ipfsHost, "ipfs/", ipfsHash));
     }
 
     function _baseURI() internal pure override returns (string memory) {
