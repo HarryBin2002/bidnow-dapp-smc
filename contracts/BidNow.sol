@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MITaddress(thisaddress(this
-pragma solidity ^0.8.9;
+pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
@@ -17,7 +17,7 @@ contract Bidnow {
     
     address private ownerBidNowContract;
 
-    address private BQKContract;
+    address private tokenContract;
 
     uint256 private constant LISTING_FREE = 100000000000000000000; // 100 BQR token
 
@@ -38,9 +38,9 @@ contract Bidnow {
      */
 
     constructor(
-        address _BQKContract
+        address _tokenContract
     ) {
-        BQKContract = _BQKContract;
+        tokenContract = _tokenContract;
     }
 
 
@@ -136,7 +136,7 @@ contract Bidnow {
     // execute transfer function
     function executeTransfer(address nftContract, uint256 tokenId) internal {
         // nft owner purchase LISTING_FEE
-        IERC20(BQKContract).transferFrom(
+        IERC20(tokenContract).transferFrom(
             msg.sender,
             address(this),
             LISTING_FREE
@@ -255,7 +255,7 @@ contract Bidnow {
     }
 
     // this function is used for Bidder can join auction
-    function joinAuction(
+    function bidAuction(
         uint256 uuid,
         uint256 offeredPrice
     ) public payable
@@ -266,11 +266,11 @@ contract Bidnow {
         require(offeredPrice > auction.initialPrice, "Offered Price is invalid!!!");
 
         // checking that msg.sender is enough token to bid
-        uint256 balanceBQK = IERC20(BQKContract).balanceOf(msg.sender);
-        require(balanceBQK >= offeredPrice, "Wallet address is not enough BQK token to bid!");
+        uint256 balanceToken = IERC20(tokenContract).balanceOf(msg.sender);
+        require(balanceToken >= offeredPrice, "Wallet address is not enough BQK token to bid!");
 
         // transfer BQK token from bidder's wallet to smart contract.
-        IERC20(BQKContract).transferFrom(
+        IERC20(tokenContract).transferFrom(
             msg.sender,
             address(this),
             offeredPrice * (10**18)
@@ -334,7 +334,7 @@ contract Bidnow {
     }
 
     // function to get the winner of the auction with its uuid
-    function getTheWinnerOfAuction(uint256 uuid) public view returns(BidderInfor memory) {
+    function getTheWinnerOfAuction(uint256 uuid) internal view returns(BidderInfor memory) {
 
         BidderInfor[] memory bidderInforList = uuidToListBidderInfo[uuid];
 
@@ -356,7 +356,7 @@ contract Bidnow {
 
     // Withdraw function
     function withdraw(address _to, uint256 amount) private {
-        IERC20(BQKContract).transfer(_to, amount);
+        IERC20(tokenContract).transfer(_to, amount);
     }
 
     /**

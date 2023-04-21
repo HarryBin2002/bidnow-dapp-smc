@@ -10,7 +10,7 @@ contract NFT is ERC721, ERC721URIStorage {
     // string private ipfsHost = "https://ipfs.infura.io/"; // this ipfsHost in infura 
     string private ipfsHost = "https://ipfs.io/"; // this ipfsHost public
 
-    constructor() ERC721("NFT", "BQNFT") {}
+    constructor() ERC721("HoBiNFT", "HBNFT") {}
 
     function mintAndApprovalNFT(address bidNowContract, uint256 tokenId, string memory ipfsHash) public {
         _safeMint(msg.sender, tokenId);
