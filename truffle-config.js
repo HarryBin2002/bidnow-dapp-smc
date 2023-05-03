@@ -3,12 +3,14 @@ const HDWalletProvider = require('@truffle/hdwallet-provider');
 // if you use mnenomic, by default: main wallet is used to sign transactions
 // const mnemonic = "pipe stumble payment grace brave walk torch hedgehog empty elite coil shoe";
 
-const privateKeyWallet = "c3c94a9fcb365bd57608fc944d1aa27ab139f73d3fbd1421ec498f78c512b6ad"; 
+const privateKeyWallet = "dbf48d914c013b586ec11b9e9a2ed1a19912aaf1a312c110c15b1b576cebcc3f"; 
 
 const infuraProjectId = "957667d02c8140f2a928416b623282f2";
 const infuraProvider = new HDWalletProvider(privateKeyWallet, `https://goerli.infura.io/v3/${infuraProjectId}`);
 
 const bscProvider = new HDWalletProvider(privateKeyWallet, 'https://data-seed-prebsc-1-s1.binance.org:8545');
+
+const hyperspaceProvider = new HDWalletProvider(privateKeyWallet, 'https://api.hyperspace.node.glif.io/rpc/v1'); // filecoin testnet
 
 module.exports = {
 
@@ -28,6 +30,12 @@ module.exports = {
       provider: () => bscProvider,
       network_id: 97,
       gas: 20000000
+    },
+
+    hyperspaceTestnet: {
+      provider: () => hyperspaceProvider,
+      network_id: "*",
+      chain_id: 3141,
     },
 
     development: {
